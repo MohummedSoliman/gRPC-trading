@@ -1,2 +1,5 @@
 .idea
 .DS_Store
+user-service/target
+proto/target
+aggregator-service/target
