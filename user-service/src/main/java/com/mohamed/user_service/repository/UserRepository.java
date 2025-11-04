@@ -1,5 +1,6 @@
 package com.mohamed.user_service.repository;
 
+import com.mohamed.user_service.entity.UserEntity;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.stereotype.Repository;
 
