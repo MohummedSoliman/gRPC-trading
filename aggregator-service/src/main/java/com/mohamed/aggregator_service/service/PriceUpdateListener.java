@@ -1,4 +1,61 @@
 package com.mohamed.aggregator_service.service;
 
-public class PriceUpdateListener {
+import com.mohamed.aggregator_service.dto.PriceUpdateDto;
+import com.mohamed.stock.PriceUpdate;
+import io.grpc.stub.StreamObserver;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+import java.io.IOException;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Objects;
+import java.util.Set;
+
+@Service
+public class PriceUpdateListener implements StreamObserver<PriceUpdate> {
+
+    private final Set<SseEmitter> emitters = Collections.synchronizedSet(new HashSet<>());
+    private final long sseTimeout;
+
+    public PriceUpdateListener(@Value("${see.timeout:300000}") long sseTimeout) {
+        this.sseTimeout = sseTimeout;
+    }
+
+    public SseEmitter createEmitter() {
+        var emitter = new SseEmitter(this.sseTimeout);
+        this.emitters.add(emitter);
+        emitter.onTimeout(() -> this.emitters.remove(emitter));
+        emitter.onError(ex -> this.emitters.remove(emitter));
+        return emitter;
+    }
+
+    @Override
+    public void onNext(PriceUpdate priceUpdate) {
+        var dto = new PriceUpdateDto(priceUpdate.getTicker().toString(), priceUpdate.getPrice());
+        this.emitters.removeIf(e -> !this.send(e, dto));
+    }
+
+    @Override
+    public void onError(Throwable throwable) {
+        this.emitters.forEach(e -> e.completeWithError(throwable));
+        this.emitters.clear();
+    }
+
+    @Override
+    public void onCompleted() {
+        this.emitters.forEach(ResponseBodyEmitter::complete);
+        this.emitters.clear();
+    }
+
+    private boolean send(SseEmitter emitter, Object o) {
+        try {
+            emitter.send(o);
+            return true;
+        } catch (IOException e) {
+            return false;
+        }
+    }
 }
